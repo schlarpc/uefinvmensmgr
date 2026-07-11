@@ -1,0 +1,35 @@
+# Cargo configuration
+# https://doc.rust-lang.org/cargo/reference/config.html
+
+[build]
+# This crate only makes sense as a UEFI binary; make it the default so plain
+# `cargo build` produces target/x86_64-unknown-uefi/*/uefinvmensmgr.efi.
+target = "x86_64-unknown-uefi"
+# Use all available cores for parallel compilation
+jobs = -1
+
+[alias]
+# Useful aliases for common tasks
+c = "check"
+b = "build"
+br = "build --release"
+
+# Linting (no --all-targets: tests/benches can't build for a no_std UEFI target)
+lint = "clippy"
+lint-fix = "clippy --fix --allow-dirty"
+
+# Format check (use rustfmt for actual formatting)
+fmt-check = "fmt -- --check"
+
+[term]
+# Show warnings during compilation (not just errors)
+verbose = false
+color = "auto"
+
+# Progress bar configuration
+[term.progress]
+# "never" instead of "auto": some runners (CI, agent harnesses) allocate a PTY,
+# so "auto" detects a terminal and floods logs with per-frame progress bars.
+# Override locally with CARGO_TERM_PROGRESS_WHEN=auto for an interactive bar.
+when = "never"
+width = 80

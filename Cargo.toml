@@ -1,0 +1,47 @@
+[package]
+name = "uefinvmensmgr"
+version = "0.1.0"
+edition = "2021"
+authors = ["Chaz Schlarp"]
+license = "MIT"
+description = "UEFI tool that attaches/detaches an NVMe namespace, then resets"
+repository = "https://github.com/schlarpc/uefinvmensmgr"
+readme = "README.md"
+keywords = ["uefi", "nvme"]
+categories = ["command-line-utilities"]
+
+[dependencies]
+uefi = { version = "0.38", features = ["alloc", "global_allocator", "panic_handler", "logger"] }
+
+[lints.rust]
+# Rust compiler lints
+unsafe_code = "warn"
+missing_docs = "allow"  # Enable when API stabilizes
+
+[lints.clippy]
+# Clippy lint groups (lower priority so individual lints can override)
+all = { level = "warn", priority = -1 }
+pedantic = { level = "allow", priority = -1 }  # Enable selectively as needed
+nursery = { level = "allow", priority = -1 }   # Enable selectively as needed
+
+# Individual clippy lints worth enabling
+enum_glob_use = "warn"
+cast_possible_truncation = "warn"
+cast_sign_loss = "warn"
+cast_possible_wrap = "warn"
+ptr_as_ptr = "warn"
+redundant_closure_for_method_calls = "warn"
+unwrap_used = "warn"  # Warn in production code; allow per-module in tests/examples
+
+[profile.dev]
+# Fast compile times for development
+opt-level = 0
+debug = true
+
+[profile.release]
+# Optimize for binary size and performance
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+panic = "abort"
