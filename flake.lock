@@ -9,11 +9,11 @@
         "systems": "systems"
       },
       "locked": {
-        "lastModified": 1794110515,
-        "narHash": "sha256-klo0iMCr+HfDZyp7reudjr4kMb4pP4A/srAOacNQ3VE=",
+        "lastModified": 1794158675,
+        "narHash": "sha256-P01Yq6QSb63N10+bjFj9HF66G8LfkykkbB3wBEVCqI4=",
         "owner": "schlarpc",
         "repo": "breakbulk",
-        "rev": "858234be86cf6c7a5d916f84bdcbeff2d7539c19",
+        "rev": "65ef5276716062fbea0dcfcb565caaa2226754d4",
         "type": "github"
       },
       "original": {
