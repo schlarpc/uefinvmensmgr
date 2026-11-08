@@ -13,7 +13,7 @@ from the schlarpc/rust-flake template, adapted for a `no_std` UEFI target.
 | Format | `cargo fmt` |
 | Nix build | `nix build` → `result/bin/uefinvmensmgr.efi` |
 | End-to-end test | `nix run .#qemu-test` |
-| Nix check all | `nix flake check` |
+| Nix check all | `nix flake check` (product builds, clippy, fmt, QEMU) |
 
 There is no `cargo test` / nextest / coverage: the artifact is a PE/COFF
 `.efi` binary that cannot execute on the build host. The QEMU/OVMF
@@ -69,16 +69,24 @@ Key invariants:
 
 ## Build System
 
-Same shape as rust-flake (crane + rust-overlay + rust-toolchain.toml as
-toolchain source of truth), with UEFI adaptations:
+Built with [breakbulk](https://github.com/schlarpc/breakbulk) (one Nix
+derivation per Cargo unit) + rust-overlay, with rust-toolchain.toml as the
+toolchain source of truth. breakbulk config is in `nix/rust.nix`:
 
-- `CARGO_BUILD_TARGET = x86_64-unknown-uefi` in crane's commonArgs (and
-  `.cargo/config.toml` for the dev shell); `doCheck = false` everywhere.
+- `workspaces.main.targets` lists only the two UEFI triples, each with
+  `tests = false` (no harness runs on firmware). `.cargo/config.toml`'s
+  `build.target` serves the dev shell.
+- `toolchain.clippy` must be set to the rust-overlay toolchain: the default
+  (`pkgs.clippy`) is built against nixpkgs' rustc and fails instantiation.
+- UEFI `traits` mark the lld-link PDB as a debug side file (it lands in the
+  package's `debug` output).
+- `mkRepository`'s `root` is a fileset of only Cargo inputs; the crate sits
+  at the repository root, so otherwise any README/flake edit rebuilds it.
 - `rust-toolchain.toml` lists the UEFI targets (Tier 2: prebuilt core/alloc,
   stable channel, no build-std).
 - Nothing is baked into the binary; deployment pairs it with a `.cfg` file.
   `packages.esp` wraps the bare binary at `EFI/BOOT/BOOTX64.EFI`.
-- clippy check runs without `--all-targets` and with `-- --deny warnings`.
+- The `clippy` variant runs without `allTargets` and with `--deny warnings`.
 
 Flakes only see git-tracked files: `git add` new files before `nix build`.
 

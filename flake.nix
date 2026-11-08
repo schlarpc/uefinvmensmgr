@@ -11,7 +11,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    crane.url = "github:ipetkov/crane";
+    breakbulk = {
+      url = "github:schlarpc/breakbulk";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     # nix-direnv for the development shell
     nix-direnv = {
@@ -20,7 +23,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, systems, rust-overlay, crane, nix-direnv, ... }:
+  outputs = { self, nixpkgs, systems, rust-overlay, breakbulk, nix-direnv, ... }:
     let
       eachSystem = nixpkgs.lib.genAttrs (import systems);
 
@@ -43,40 +46,27 @@
         let pkgs = pkgsFor system;
         in pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
 
-      # Create crane lib for each system
-      craneLibFor = system:
-        let
-          pkgs = pkgsFor system;
-          rustToolchain = rustToolchainFor system;
-        in
-        (crane.mkLib pkgs).overrideToolchain rustToolchain;
-
-      # Common arguments for all crane builds
-      commonArgsFor = system: { uefiTarget ? uefiTargets.x86_64 }:
-        let craneLib = craneLibFor system;
-        in
-        {
-          src = craneLib.cleanCargoSource ./.;
-          strictDeps = true;
-          CARGO_BUILD_TARGET = uefiTarget;
-          # UEFI binaries can't execute on the build host
-          doCheck = false;
+      # One derivation per Cargo unit; configuration lives in nix/rust.nix.
+      repoFor = system: breakbulk.lib.mkRepository {
+        pkgs = pkgsFor system;
+        # Only what Cargo reads: the crate sits at the repository root, so
+        # its source view would otherwise include README, flake.nix, ...
+        root = nixpkgs.lib.fileset.toSource {
+          root = ./.;
+          fileset = nixpkgs.lib.fileset.unions [
+            ./Cargo.toml
+            ./Cargo.lock
+            ./.cargo
+            ./src
+          ];
         };
-
-      cargoArtifactsFor = system: args:
-        let craneLib = craneLibFor system;
-        in craneLib.buildDepsOnly (commonArgsFor system args);
+        modules = [ ./nix/rust.nix ];
+      };
 
       # Build the .efi binary. Configuration is NOT baked in; deployment
       # pairs the binary with a <basename>.cfg file (see README).
-      mkPackageFor = system: args:
-        let
-          craneLib = craneLibFor system;
-          commonArgs = commonArgsFor system args;
-        in
-        craneLib.buildPackage (commonArgs // {
-          cargoArtifacts = cargoArtifactsFor system args;
-        });
+      mkPackageFor = system: { uefiTarget ? uefiTargets.x86_64 }:
+        (repoFor system).workspaces.main.target.${uefiTarget}.packages.uefinvmensmgr;
 
       # Directory shaped like an ESP: the binary at the removable-media
       # fallback path, so firmware "boot from file" / QEMU vvfat just works.
@@ -179,24 +169,18 @@
       checks = eachSystem (system:
         let
           pkgs = pkgsFor system;
-          craneLib = craneLibFor system;
-          commonArgs = commonArgsFor system { };
-          cargoArtifacts = cargoArtifactsFor system { };
+          rustToolchain = rustToolchainFor system;
         in
-        {
-          # Build the crate as part of checks
-          build = self.packages.${system}.default;
-
-          # Run clippy (no --all-targets: test harnesses can't build for UEFI)
-          clippy = craneLib.cargoClippy (commonArgs // {
-            inherit cargoArtifacts;
-            cargoClippyExtraArgs = "-- --deny warnings";
-          });
-
+        # Builds of each product, clippy, noSourceReferences.
+        (repoFor system).checks // {
           # Check formatting
-          fmt = craneLib.cargoFmt {
-            src = commonArgs.src;
-          };
+          fmt = pkgs.runCommand "uefinvmensmgr-fmt"
+            { nativeBuildInputs = [ rustToolchain ]; }
+            ''
+              cd ${./.}
+              cargo fmt --check
+              touch $out
+            '';
         } // nixpkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
           # Boot the binary under OVMF against an emulated NVMe subsystem
           integration = pkgs.runCommand "uefinvmensmgr-integration"
